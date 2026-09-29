@@ -1,0 +1,4 @@
+my-app/node_modules/
+my-app/dist/
+*.tsbuildinfo
+.DS_Store

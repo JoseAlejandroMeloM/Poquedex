@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Taller 1 - Buscador de Pokémon</title>
+</head>
+
+<body>
+    <main>
+        <h1>Buscador de Pokémon</h1>
+
+        <label for="pokemonInput">Nombre o ID del Pokémon:</label>
+        <input
+            type="text"
+            id="pokemonInput"
+            placeholder="Ejemplo: pikachu o 25"
+        >
+        <button id="buscarBtn" type="button">Buscar</button>
+
+        <p id="mensaje" aria-live="polite"></p>
+
+        <article id="resultado" hidden>
+            <img id="pokemonImagen" src="" alt="">
+
+            <section>
+                <h2>Datos obligatorios</h2>
+                <p><strong>Nombre:</strong> <span id="pokemonNombre"></span></p>
+                <p><strong>Especie:</strong> <span id="pokemonEspecie"></span></p>
+                <p><strong>Tipo:</strong> <span id="pokemonTipo"></span></p>
+                <p><strong>ID:</strong> <span id="pokemonId"></span></p>
+            </section>
+
+            <hr>
+
+            <section>
+                <h2>Datos extra</h2>
+                <p><strong>Altura:</strong> <span id="pokemonAltura"></span></p>
+                <p><strong>Peso:</strong> <span id="pokemonPeso"></span></p>
+                <p><strong>Experiencia base:</strong> <span id="pokemonExperiencia"></span></p>
+            </section>
+        </article>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
