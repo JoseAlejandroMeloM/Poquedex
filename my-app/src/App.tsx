@@ -56,6 +56,7 @@ const equipo = [
 
 type EntradaRegional = { id: number; nombre: string };
 type Generacion = { pokemon_species: { name: string; url: string }[] };
+type Encuentro = EntradaRegional & Posicion;
 
 function lugarCercano({ x, y }: Posicion): Lugar | null {
   if (Math.abs(x - 50) < 13 && y >= 32 && y < 49) return "laboratorio";
@@ -99,7 +100,14 @@ function App() {
   const [cargandoCatalogo, setCargandoCatalogo] = useState(false);
   const [errorCatalogo, setErrorCatalogo] = useState("");
   const [intentoCatalogo, setIntentoCatalogo] = useState(0);
+  const [encuentro, setEncuentro] = useState<Encuentro | null>(null);
+  const [avistamientos, setAvistamientos] = useState(0);
   const cacheCatalogo = useRef(new Map<string, EntradaRegional[]>());
+  const catalogoRef = useRef<EntradaRegional[]>([]);
+  const encuentroRef = useRef<Encuentro | null>(null);
+  const exploracionRef = useRef(0);
+  const enfriamientoEncuentroRef = useRef(0);
+  const regionRef = useRef("Kanto");
   const temporizadoresDex = useRef<number[]>([]);
   const buscarRef = useRef<HTMLInputElement>(null);
   const enfocarBusqueda = useRef(false);
@@ -108,6 +116,14 @@ function App() {
 
   const cercano = lugarCercano(posicion);
   const regionActual = regiones.find((item) => item.nombre === region) ?? regiones[3];
+
+  useEffect(() => {
+    catalogoRef.current = catalogo;
+  }, [catalogo]);
+
+  useEffect(() => {
+    encuentroRef.current = encuentro;
+  }, [encuentro]);
 
   function limpiarAnimaciones() {
     if (temporizadorRevelacion.current !== null) window.clearTimeout(temporizadorRevelacion.current);
@@ -149,6 +165,45 @@ function App() {
     setFaseDex("datos");
     setCargando(false);
     setConsulta("");
+  }
+
+  function limpiarEncuentro(enfriar = true) {
+    encuentroRef.current = null;
+    setEncuentro(null);
+    teclas.current.clear();
+    setCaminandoMapa(false);
+    if (enfriar) enfriamientoEncuentroRef.current = performance.now() + 6000;
+  }
+
+  function abrirEncuentro(encontrado: Encuentro) {
+    limpiarEncuentro();
+    setAvistamientos((actual) => actual + 1);
+    setBusqueda(encontrado.nombre);
+    setConsulta(encontrado.nombre);
+    setIntento((actual) => actual + 1);
+    setMostrarFicha(true);
+    setFaseDex("datos");
+  }
+
+  function crearEncuentro(posicionJugador: Posicion) {
+    const lista = catalogoRef.current;
+    if (!lista.length || encuentroRef.current || performance.now() < enfriamientoEncuentroRef.current) return;
+    const encontrado = lista[Math.floor(Math.random() * lista.length)];
+    let posicionSalvaje = posicionJugador;
+    for (let intentoPosicion = 0; intentoPosicion < 8; intentoPosicion += 1) {
+      const distancia = 18 + Math.random() * 26;
+      const angulo = Math.random() * Math.PI * 2;
+      const candidato = {
+        x: Math.max(25, Math.min(735, posicionJugador.x + Math.cos(angulo) * distancia)),
+        y: Math.max(25, Math.min(445, posicionJugador.y + Math.sin(angulo) * distancia)),
+      };
+      if (puedeCaminarEnMapa(candidato)) { posicionSalvaje = candidato; break; }
+    }
+    const nuevoEncuentro = { ...encontrado, ...posicionSalvaje };
+    encuentroRef.current = nuevoEncuentro;
+    setEncuentro(nuevoEncuentro);
+    teclas.current.clear();
+    setCaminandoMapa(false);
   }
 
   useEffect(() => {
@@ -241,7 +296,17 @@ function App() {
           posicionMapaRef.current = siguiente;
           setPosicionMapa(siguiente);
           const llegada = regiones.find((item) => Math.hypot(siguiente.x - item.x, siguiente.y - item.y) < 23);
-          if (llegada) setRegion((actual) => actual === llegada.nombre ? actual : llegada.nombre);
+          if (llegada && regionRef.current !== llegada.nombre) {
+            regionRef.current = llegada.nombre;
+            limpiarEncuentro(false);
+            exploracionRef.current = 0;
+            setRegion(llegada.nombre);
+          }
+          exploracionRef.current += Math.hypot(siguiente.x - anterior.x, siguiente.y - anterior.y);
+          if (exploracionRef.current > 42) {
+            exploracionRef.current = 0;
+            if (Math.random() < 0.42) crearEncuentro(siguiente);
+          }
         }
       }
       frame = requestAnimationFrame(mover);
@@ -249,6 +314,10 @@ function App() {
     const presionar = (evento: KeyboardEvent) => {
       if (evento.target instanceof HTMLElement && (evento.target.closest("input, textarea, [contenteditable='true']"))) return;
       const tecla = evento.key.toLowerCase();
+      if (tecla === "e" && !evento.repeat && encuentroRef.current) {
+        abrirEncuentro(encuentroRef.current);
+        return;
+      }
       if (!["w", "a", "s", "d", "arrowup", "arrowleft", "arrowdown", "arrowright"].includes(tecla)) return;
       evento.preventDefault();
       teclas.current.add(tecla);
@@ -375,6 +444,7 @@ function App() {
   }, []);
 
   const consultarPokemon = useCallback((nombre: string) => {
+    limpiarEncuentro();
     setBusqueda(nombre);
     setConsulta(nombre);
     setIntento((actual) => actual + 1);
@@ -449,7 +519,7 @@ function App() {
 
         {vista === "atlas" && (
           <section className="atlas-view" aria-label="Atlas Pokémon">
-            <header className="screen-bar"><button type="button" onClick={volverAlPueblo}>◀ PUEBLO</button><strong>ATLAS POKÉMON</strong><span>● CONECTADO</span></header>
+            <header className="screen-bar"><button type="button" onClick={volverAlPueblo}>◀ PUEBLO</button><strong>ATLAS POKÉMON</strong><span>● AVISTAMIENTOS {String(avistamientos).padStart(2, "0")}</span></header>
             <form className="pixel-search" onSubmit={buscarPokemon}>
               <label htmlFor="pokemon-search">BUSCAR POKÉMON</label>
               <input ref={buscarRef} id="pokemon-search" value={busqueda} onChange={(evento) => setBusqueda(evento.target.value)} placeholder="Nombre o número..." autoComplete="off" />
@@ -479,6 +549,13 @@ function App() {
                 <foreignObject x={posicionMapa.x - 22} y={posicionMapa.y - 42} width="44" height="52" className="map-player" aria-label={`Entrenador caminando por ${region}`}>
                   <div className={`map-trainer facing-${direccion} ${caminandoMapa ? "walking" : ""}`} />
                 </foreignObject>
+                {encuentro && (
+                  <g className="wild-encounter-sprite" transform={`translate(${encuentro.x - 25} ${encuentro.y - 42})`} role="img" aria-label={`Pokémon salvaje ${encuentro.nombre}`}>
+                    <circle cx="25" cy="36" r="19" />
+                    <image href={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${encuentro.id}.png`} x="3" y="0" width="44" height="44" />
+                    <text x="25" y="66">?</text>
+                  </g>
+                )}
                 <text className="sea-label" x="606" y="75">MAR AZUL</text><text className="sea-label" x="29" y="460">RUTAS DEL MUNDO</text>
               </svg>
               <div className="map-walk-help">WASD / FLECHAS · CAMINA POR LAS RUTAS</div>
@@ -487,6 +564,17 @@ function App() {
                   <button key={tecla} type="button" aria-label={`Caminar ${nombre} en el mapa`} onPointerDown={(evento) => iniciarControl(evento, tecla, dir)} onPointerUp={() => teclas.current.delete(tecla)} onPointerCancel={() => teclas.current.delete(tecla)}>{signo}</button>
                 ))}
               </div>
+              {encuentro && (
+                <div className="encounter-menu" role="dialog" aria-label={`Encuentro con ${encuentro.nombre}`}>
+                  <div className="encounter-copy">
+                    <span>¡ENCUENTRO SALVAJE!</span>
+                    <strong>{encuentro.nombre.replaceAll("-", " ").toUpperCase()}</strong>
+                    <small>Se ha cruzado en tu ruta por {region}.</small>
+                  </div>
+                  <button type="button" onClick={() => abrirEncuentro(encuentro)}>VER EN LA POKÉDEX <b>↵ / E</b></button>
+                  <button type="button" className="encounter-dismiss" onClick={() => limpiarEncuentro()}>SEGUIR CAMINANDO</button>
+                </div>
+              )}
             </div>
             <div className="map-dialog" aria-live="polite"><div><span className="menu-kicker">REGIÓN ALCANZADA</span><h2>{regionActual.nombre.toUpperCase()}</h2><p>{regionActual.lugares}</p></div><span className="map-dialog-help">CAMINA HASTA OTRA REGIÓN PARA EXPLORARLA ▶</span></div>
             <section className="region-roster" aria-label={`Pokémon de ${region}`}>
